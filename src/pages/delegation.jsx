@@ -13,6 +13,7 @@ import {
   BellRing,
   ChevronLeft,
   ChevronRight,
+  Printer,
 } from "lucide-react";
 import { useRef } from "react";
 import AdminLayout from "../components/layout/AdminLayout";
@@ -80,9 +81,25 @@ function DelegationDataPage() {
   const [userRole, setUserRole] = useState("");
   const [username, setUsername] = useState("");
   const [dateFilter, setDateFilter] = useState("all");
+  const [doerFilter, setDoerFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerMedia, setViewerMedia] = useState({ url: '', type: 'image' });
+
+  const dispatch = useDispatch();
+  const { loading, delegation, delegation_done } = useSelector(
+    (state) => state.delegation
+  );
+
+  const uniqueDoers = useMemo(() => {
+    if (!delegation) return [];
+    const doers = new Set();
+    delegation.forEach(task => {
+      const name = task.name || task.assigned_person;
+      if (name) doers.add(name);
+    });
+    return Array.from(doers).sort();
+  }, [delegation]);
 
   const itemsPerPage = 50;
   const filterOptions = [
@@ -94,11 +111,6 @@ function DelegationDataPage() {
 
   // Debounced search term for better performance
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
-
-  const { loading, delegation, delegation_done } = useSelector(
-    (state) => state.delegation
-  );
-  const dispatch = useDispatch();
 
   useEffect(() => {
     dispatch(delegationData());
@@ -254,6 +266,7 @@ function DelegationDataPage() {
     setStartDate("");
     setEndDate("");
     setDateFilter("all");
+    setDoerFilter("all");
   }, []);
 
 
@@ -273,7 +286,9 @@ function DelegationDataPage() {
         (userRole || "").toLowerCase() === "admin" ||
         (assignedUser && assignedUser.toLowerCase() === (username || "").toLowerCase());
 
-      if (!userMatch) return false;
+      const matchesDoer = doerFilter === "all" || assignedUser === doerFilter;
+
+      if (!userMatch || !matchesDoer) return false;
 
       const matchesSearch = debouncedSearchTerm
         ? Object.values(task).some(
@@ -411,7 +426,7 @@ function DelegationDataPage() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [showHistory, debouncedSearchTerm, dateFilter, startDate, endDate]);
+  }, [showHistory, debouncedSearchTerm, dateFilter, doerFilter, startDate, endDate]);
 
   const paginatedTasks = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -792,6 +807,373 @@ function DelegationDataPage() {
     }
   };
 
+  const handlePrintOverdue = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const overdueTasks = delegation.filter((task) => {
+      const assignedUser = task.name || task.assigned_person || "";
+      const userMatch =
+        (userRole || "").toLowerCase() === "admin" ||
+        (assignedUser && assignedUser.toLowerCase() === (username || "").toLowerCase());
+
+      const matchesDoer = doerFilter === "all" || assignedUser === doerFilter;
+
+      if (!userMatch || !matchesDoer) return false;
+
+      const matchesSearch = debouncedSearchTerm
+        ? Object.values(task).some(
+          (value) =>
+            value &&
+            value
+              .toString()
+              .toLowerCase()
+              .includes(debouncedSearchTerm.toLowerCase())
+        )
+        : true;
+
+      if (!matchesSearch) return false;
+
+      const taskDateStr = (task.status === "extend" && task.next_extend_date)
+        ? task.next_extend_date
+        : (task.planned_date || task.task_start_date);
+
+      if (taskDateStr) {
+        const pDate = new Date(taskDateStr);
+        pDate.setHours(0, 0, 0, 0);
+        return pDate < today;
+      }
+      return false;
+    });
+
+    if (overdueTasks.length === 0) {
+      showToast("No overdue tasks found to print", "info");
+      return;
+    }
+
+    // Group by doer
+    const groupedByDoer = overdueTasks.reduce((acc, task) => {
+      const doer = task.name || "Unknown";
+      if (!acc[doer]) acc[doer] = [];
+      acc[doer].push(task);
+      return acc;
+    }, {});
+
+    const totalTasks = overdueTasks.length;
+    const totalDoers = Object.keys(groupedByDoer).length;
+
+    const printWindow = window.open('', '_blank');
+    const content = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Overdue Tasks Report - ${new Date().toLocaleDateString()}</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+            
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            
+            body { 
+              font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; 
+              color: #1e293b;
+              line-height: 1.5;
+              padding: 40px;
+              background-color: #fff;
+            }
+
+            @media print {
+              body { 
+                padding: 0; 
+                background-color: #fff !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              .no-print { display: none; }
+              .page-break { page-break-after: always; }
+              tr { page-break-inside: avoid; }
+              thead { display: table-header-group; }
+            }
+
+            .header { 
+              border-bottom: 3px solid #7c3aed; 
+              padding-bottom: 20px;
+              margin-bottom: 30px;
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-end;
+              position: relative;
+              background: transparent;
+            }
+            .header-title h1 { 
+              color: #7c3aed; 
+              font-size: 24px;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: -0.025em;
+            }
+
+            .header-info { text-align: right; color: #64748b; font-size: 12px; }
+
+            .summary-cards {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 20px;
+              margin-bottom: 30px;
+            }
+
+            .card {
+              background: #f8fafc;
+              border: 1px solid #e2e8f0;
+              padding: 15px;
+              border-radius: 8px;
+            }
+
+            .card-label { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 5px; }
+            .card-value { font-size: 20px; font-weight: 700; color: #0f172a; }
+
+            .doer-section { margin-bottom: 40px; page-break-inside: auto; }
+            
+            .doer-header { 
+              background: #7c3aed; 
+              color: #fbbf24; /* Yellow/Amber color */
+              padding: 10px 15px;
+              border-radius: 6px 6px 0 0;
+              font-weight: 700;
+              font-size: 14px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            }
+
+            .doer-name-text { 
+              font-weight: 800; 
+              display: inline-block;
+              margin-left: 5px;
+            }
+
+            .doer-badge {
+              background: rgba(255, 255, 255, 0.2);
+              padding: 2px 8px;
+              border-radius: 12px;
+              font-size: 11px;
+            }
+
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              border: 1px solid #e2e8f0;
+              border-top: none;
+            }
+
+            th { 
+              background-color: #f1f5f9; 
+              color: #475569; 
+              font-weight: 700; 
+              text-transform: uppercase; 
+              font-size: 10px;
+              letter-spacing: 0.05em;
+              padding: 12px 10px;
+              text-align: left;
+              border-bottom: 2px solid #e2e8f0;
+            }
+
+            td { 
+              padding: 12px 10px; 
+              text-align: left; 
+              font-size: 11px; 
+              border-bottom: 1px solid #f1f5f9;
+              vertical-align: top;
+            }
+
+            tr:nth-child(even) { background-color: #fcfcfd; }
+
+            .task-id { font-family: 'Courier New', monospace; color: #6366f1; font-weight: 700; }
+            .task-desc { color: #334155; font-weight: 500; }
+            .planned-date { color: #ef4444; font-weight: 700; }
+            
+            .overdue-badge {
+              background: #fef2f2;
+              color: #dc2626;
+              padding: 2px 6px;
+              border-radius: 4px;
+              font-weight: 700;
+              display: inline-block;
+              margin-top: 4px;
+              font-size: 10px;
+              border: 1px solid #fee2e2;
+            }
+
+            .footer { 
+              margin-top: 50px; 
+              font-size: 10px; 
+              color: #94a3b8; 
+              text-align: center; 
+              border-top: 1px solid #e2e8f0; 
+              padding-top: 20px;
+              font-style: italic;
+            }
+
+            .watermark-overlay {
+              position: fixed;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              z-index: -100;
+              pointer-events: none;
+              background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200'%3E%3Ctext transform='rotate(-30, 150, 100)' x='50' y='100' fill='rgba(124, 58, 237, 0.1)' font-size='25' font-family='Inter, sans-serif' font-weight='900'%3EACE MARK%3C/text%3E%3C/svg%3E");
+              background-repeat: repeat;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="watermark-overlay"></div>
+          <div class="header">
+            <div class="header-title">
+              <h1>Overdue Tasks Report</h1>
+            </div>
+            <div class="header-info">
+              <p>Generated: ${new Date().toLocaleString()}</p>
+              <p>Internal Record #DEL-${Math.floor(Math.random() * 10000)}</p>
+            </div>
+          </div>
+
+          <div class="summary-cards">
+            <div class="card">
+              <div class="card-label">Total Overdue Tasks</div>
+              <div class="card-value">${totalTasks}</div>
+            </div>
+            <div class="card">
+              <div class="card-label">Assigned Doers</div>
+              <div class="card-value">${totalDoers}</div>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 40px; page-break-inside: avoid;">
+            <h2 style="font-size: 14px; text-transform: uppercase; color: #64748b; margin-bottom: 15px; border-left: 4px solid #7c3aed; padding-left: 10px;">Doer Performance Overview</h2>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 15px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px;">
+              ${(() => {
+                const colors = ['#7c3aed', '#db2777', '#2563eb', '#059669', '#d97706', '#dc2626', '#4b5563'];
+                return Object.entries(groupedByDoer)
+                  .sort((a, b) => b[1].length - a[1].length)
+                  .slice(0, 6) // Top 6 doers
+                  .map(([doer, tasks], index) => {
+                    const percentage = (tasks.length / totalTasks) * 100;
+                    const color = colors[index % colors.length];
+                    const radius = 35;
+                    const circumference = 2 * Math.PI * radius;
+                    const offset = circumference - (percentage / 100) * circumference;
+                    
+                    return `
+                      <div style="text-align: center; background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                        <div style="position: relative; width: 80px; height: 80px; margin: 0 auto 10px;">
+                          <svg width="80" height="80" viewBox="0 0 80 80">
+                            <circle cx="40" cy="40" r="${radius}" fill="none" stroke="#f1f5f9" stroke-width="8" />
+                            <circle cx="40" cy="40" r="${radius}" fill="none" stroke="${color}" stroke-width="8" 
+                              stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" 
+                              stroke-linecap="round" transform="rotate(-90 40 40)" />
+                          </svg>
+                          <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: 700; font-size: 14px; color: ${color};">
+                            ${Math.round(percentage)}%
+                          </div>
+                        </div>
+                        <div style="font-size: 10px; font-weight: 600; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${doer}</div>
+                        <div style="font-size: 9px; color: #64748b; margin-top: 2px;">${tasks.length} Overdue</div>
+                      </div>
+                    `;
+                  }).join('');
+              })()}
+            </div>
+          </div>
+
+          <div style="margin-bottom: 40px; page-break-inside: avoid;">
+            <h2 style="font-size: 14px; text-transform: uppercase; color: #64748b; margin-bottom: 15px; border-left: 4px solid #7c3aed; padding-left: 10px;">Task Distribution Details</h2>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px;">
+              ${Object.entries(groupedByDoer).sort((a, b) => b[1].length - a[1].length).map(([doer, tasks]) => {
+                const percentage = (tasks.length / totalTasks) * 100;
+                return `
+                  <div style="margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px;">
+                      <span style="font-weight: 600;">${doer}</span>
+                      <span style="color: #7c3aed; font-weight: 700;">${tasks.length} Task${tasks.length > 1 ? 's' : ''} (${Math.round(percentage)}%)</span>
+                    </div>
+                    <div style="width: 100%; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden;">
+                      <div style="width: ${percentage}%; height: 100%; background: #7c3aed; border-radius: 4px;"></div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+          
+          ${Object.entries(groupedByDoer).map(([doer, tasks]) => `
+            <div class="doer-section">
+              <div class="doer-header">
+                <span>DOER: <span class="doer-name-text">${doer.toUpperCase()}</span></span>
+                <span class="doer-badge">${tasks.length} Task${tasks.length > 1 ? 's' : ''}</span>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 8%">ID</th>
+                    <th style="width: 40%">Task Details</th>
+                    <th style="width: 15%">Deadline</th>
+                    <th style="width: 15%">Days Overdue</th>
+                    <th style="width: 12%">Given By</th>
+                    <th style="width: 10%">Dept.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${tasks.map(task => {
+                    const taskDate = task.status === "extend" && task.next_extend_date 
+                      ? task.next_extend_date 
+                      : (task.planned_date || task.task_start_date);
+                    
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const pDate = new Date(taskDate);
+                    pDate.setHours(0, 0, 0, 0);
+                    const diffTime = Math.abs(today - pDate);
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                    return `
+                    <tr>
+                      <td class="task-id">#${task.id}</td>
+                      <td class="task-desc">${task.task_description}</td>
+                      <td class="planned-date">${formatDateTimeForDisplay(taskDate)}</td>
+                      <td>
+                        <div class="overdue-badge">${diffDays} DAY${diffDays > 1 ? 'S' : ''} OVERDUE</div>
+                      </td>
+                      <td>${task.given_by}</td>
+                      <td style="text-transform: uppercase">${task.department || '—'}</td>
+                    </tr>
+                  `}).join('')}
+                </tbody>
+              </table>
+            </div>
+          `).join('')}
+          
+          <div class="footer">
+            Confidential Document &copy; ${new Date().getFullYear()} - Delegation Management System
+          </div>
+
+          <script>
+            window.onload = () => {
+              // Short delay to ensure styles and fonts are loaded
+              setTimeout(() => {
+                window.print();
+                setTimeout(() => { window.close(); }, 500);
+              }, 300);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(content);
+    printWindow.document.close();
+  };
+
   const handleSendUrgentWhatsApp = async () => {
     if (selectedItems.size === 0) return;
 
@@ -856,7 +1238,20 @@ function DelegationDataPage() {
 
               <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                 {!showHistory && (
-                  <div className="flex items-center gap-2 flex-1 sm:flex-none">
+                  <div className="flex flex-wrap items-center gap-2 flex-1 sm:flex-none">
+                    <select
+                      value={doerFilter}
+                      onChange={(e) => setDoerFilter(e.target.value)}
+                      className="w-full sm:w-auto border border-purple-200 rounded-md px-3 py-2 text-xs sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 h-10"
+                    >
+                      <option value="all">All Doers</option>
+                      {uniqueDoers.map((doer) => (
+                        <option key={doer} value={doer}>
+                          {doer}
+                        </option>
+                      ))}
+                    </select>
+
                     <select
                       value={dateFilter}
                       onChange={(e) => setDateFilter(e.target.value)}
@@ -889,6 +1284,16 @@ function DelegationDataPage() {
 
                 {!showHistory && (
                   <>
+                    <button
+                      onClick={handlePrintOverdue}
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-sm font-medium text-purple-700 bg-white border border-purple-200 rounded-md hover:bg-purple-50 transition-colors shadow-sm h-10"
+                      title="Print Overdue Tasks"
+                    >
+                      <Printer className="h-4 w-4" />
+                      <span className="hidden sm:inline">Print Overdue</span>
+                      <span className="sm:hidden">Print</span>
+                    </button>
+
                     <button
                       onClick={handleSendUrgentWhatsApp}
                       disabled={selectedItems.size === 0 || isSubmitting}
