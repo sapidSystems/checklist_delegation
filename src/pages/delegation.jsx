@@ -27,6 +27,7 @@ import { insertDelegationDoneAndUpdate } from "../redux/api/delegationApi";
 import { sendUrgentTaskNotification, sendTaskExtensionNotification } from "../services/whatsappService";
 import { useMagicToast } from "../context/MagicToastContext";
 import RenderDescription, { MediaViewer } from "../components/RenderDescription";
+import logo from "../assets/Ace_Logoo.jpg";
 
 // Configuration object - Move all configurations here
 const CONFIG = {
@@ -1093,7 +1094,7 @@ function DelegationDataPage() {
           <div class="watermark-overlay"></div>
           <div class="header">
             <div class="brand-block">
-              <img src="${window.location.origin}/src/assets/Ace_Logoo.jpg" class="brand-logo-img" />
+              <img src="${logo}" class="brand-logo-img" />
             </div>
             <div class="report-title-container">
               <h1 class="report-main-title">Overdue Delegation Report</h1>
