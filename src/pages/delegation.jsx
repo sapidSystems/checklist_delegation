@@ -1100,6 +1100,7 @@ function DelegationDataPage() {
               <div class="report-subtitle">Performance & Accountability Audit</div>
             </div>
             <div class="header-metadata">
+              <div class="meta-item" style="color: #7c3aed; font-weight: 700; margin-bottom: 5px;">Powered by Botivate</div>
               <div class="meta-item"><span class="meta-label">Generated:</span> ${new Date().toLocaleString()}</div>
               <div class="meta-item"><span class="meta-label">Ref ID:</span> DEL-${Math.floor(Math.random() * 1000)}</div>
               <div class="meta-item"><span class="meta-label">Status:</span> <span class="status-urgent">URGENT</span></div>
@@ -1222,7 +1223,7 @@ function DelegationDataPage() {
           `).join('')}
           
           <div class="footer">
-            Confidential Document &copy; ${new Date().getFullYear()} - Delegation Management System
+            Confidential Document &copy; ${new Date().getFullYear()} - Delegation Management System | Powered by Botivate
           </div>
 
           <script>
