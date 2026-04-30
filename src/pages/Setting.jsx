@@ -61,6 +61,13 @@ const Setting = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [profileFile, setProfileFile] = useState(null);
   const [profilePreview, setProfilePreview] = useState(null);
+  
+  // Cleanup State
+  const [showCleanupModal, setShowCleanupModal] = useState(false);
+  const [cleanupDays, setCleanupDays] = useState(45);
+  const [cleanupItems, setCleanupItems] = useState([]);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [showDangerPopup, setShowDangerPopup] = useState(false);
 
   const { userData, department, departmentsOnly, givenBy, customDropdowns, loading, error } = useSelector((state) => state.setting);
   const dispatch = useDispatch();
@@ -409,6 +416,35 @@ const Setting = () => {
     setShiftToPerson('');
     setLeaveSuccess(false);
     setHasFetched(false);
+  };
+
+  const fetchCleanupPreview = async (days) => {
+    setCleanupLoading(true);
+    setCleanupItems([]);
+    try {
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
+      const cutoffDateString = cutoffDate.toISOString().split('T')[0]; 
+
+      const { data, error } = await supabase
+        .from('checklist')
+        .select('*')
+        .eq('admin_done', true)
+        .lt('submission_date', cutoffDateString)
+        .limit(100);
+
+      if (error) {
+        console.error('Supabase Query Error:', error);
+        throw error;
+      }
+      setCleanupItems(data || []);
+    } catch (err) {
+      console.error('Error fetching cleanup preview:', err);
+      const errMsg = err.message || "Database connection error";
+      showToast(`Failed to fetch preview: ${errMsg}`, "error");
+    } finally {
+      setCleanupLoading(false);
+    }
   };
 
   // Add to your existing handleTabChange function
@@ -1411,7 +1447,21 @@ const Setting = () => {
             <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-b border-purple px-4 py-4 md:px-6 flex flex-col md:flex-row gap-4 md:items-center justify-between">
               <h2 className="text-lg font-bold text-purple-700">User List</h2>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Bulk Cleanup Feature */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setShowCleanupModal(true);
+                      fetchCleanupPreview(cleanupDays);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 border border-red-100 rounded-lg text-xs font-bold hover:bg-red-100 transition-all active:scale-95 shadow-sm"
+                  >
+                    <Trash2 size={14} />
+                    <span>Cleanup Checklist</span>
+                  </button>
+                </div>
+
                 <div className="relative w-full sm:w-auto">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
                   <input
@@ -2640,6 +2690,192 @@ const Setting = () => {
                   >
                     Keep Profile
                   </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Cleanup Selection Modal */}
+        {showCleanupModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowCleanupModal(false)} />
+            <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">Checklist Cleanup</h3>
+                  <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Manage history & optimize storage</p>
+                </div>
+                <button
+                  onClick={() => setShowCleanupModal(false)}
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-3">Retention Period</label>
+                  <div className="flex bg-slate-100 p-1 rounded-lg gap-1">
+                    {[45, 50, 60].map(days => (
+                      <button
+                        key={`cleanup-btn-${days}`}
+                        onClick={() => {
+                          setCleanupDays(days);
+                          fetchCleanupPreview(days);
+                        }}
+                        className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${cleanupDays === days
+                          ? 'bg-white text-purple-600 shadow-sm border border-slate-200'
+                          : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                      >
+                        {days} Days
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-2 italic">Data older than {cleanupDays} days will be identified for cleanup.</p>
+                </div>
+
+                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                  <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex justify-between items-center">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Data Preview</span>
+                    <span className="text-[10px] font-medium text-slate-400">{cleanupItems.length} records found</span>
+                  </div>
+
+                  <div className="max-h-48 overflow-y-auto divide-y divide-slate-100">
+                    {cleanupLoading ? (
+                      <div className="flex items-center justify-center py-10 gap-2">
+                        <RefreshCw size={16} className="animate-spin text-purple-500" />
+                        <span className="text-xs text-slate-500 font-medium">Scanning records...</span>
+                      </div>
+                    ) : cleanupItems.length > 0 ? (
+                      cleanupItems.map((item) => (
+                        <div key={item.task_id} className="p-3 hover:bg-slate-50 transition-colors">
+                          <div className="flex justify-between items-center gap-4">
+                            <div className="min-w-0">
+                              <p className="text-xs font-semibold text-slate-700 truncate">{item.task_description}</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5">{item.name || 'User'} • {new Date(item.submission_date).toLocaleDateString()}</p>
+                            </div>
+                            <span className="shrink-0 text-[10px] font-bold text-slate-400">ID: {String(item.task_id || "").slice(-4)}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-10 text-center">
+                        <p className="text-xs text-slate-400 font-medium">No matching records found.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-2 flex flex-col gap-3">
+                  <button
+                    disabled={cleanupItems.length === 0}
+                    onClick={() => {
+                      setShowCleanupModal(false);
+                      setShowDangerPopup(true);
+                    }}
+                    className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-bold text-xs uppercase tracking-wider transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Proceed to Cleanup
+                  </button>
+                  <p className="text-[9px] text-center text-slate-400 font-medium">
+                    This action is a safety-first workflow. No data is deleted in the current step.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Danger Cleanup Popup */}
+        {showDangerPopup && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
+            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+              <div className="px-6 py-6 border-b border-red-50 bg-red-50/30 flex items-center gap-4">
+                <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center text-red-600 shrink-0">
+                  <Trash2 size={24} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">Critical Action Required</h3>
+                  <p className="text-[10px] text-red-600 font-black uppercase tracking-widest">Permanent Data Purge</p>
+                </div>
+              </div>
+
+              <div className="p-6">
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-5 mb-6">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-3 text-center">Retention Protocol</h4>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1 text-center">
+                      <p className="text-[9px] text-slate-400 font-bold uppercase mb-1">Preserve</p>
+                      <p className="text-sm font-black text-slate-700">Latest {cleanupDays} Days</p>
+                    </div>
+                    <div className="h-10 w-px bg-slate-200"></div>
+                    <div className="flex-1 text-center">
+                      <p className="text-[9px] text-slate-400 font-bold uppercase mb-1">Delete</p>
+                      <p className="text-sm font-black text-red-600">All History Prior</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 mb-8">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1">Targeted Records ({cleanupItems.length})</p>
+                  <div className="max-h-40 overflow-y-auto border border-slate-100 rounded-lg divide-y divide-slate-50">
+                    {cleanupItems.map((item, idx) => (
+                      <div key={`purge-${item.task_id}-${idx}`} className="p-3 bg-white flex items-center gap-3">
+                        <span className="text-[10px] font-bold text-slate-300">#{idx + 1}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-slate-700 truncate">{item.task_description}</p>
+                          <p className="text-[9px] text-slate-400 font-medium">Submitted: {new Date(item.submission_date).toLocaleDateString()} • {item.name}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <button
+                    disabled={isRefreshing}
+                    onClick={async () => {
+                      setIsRefreshing(true);
+                      try {
+                        const { bulkDeleteApprovedChecklists } = await import('../redux/api/checkListApi');
+                        const { count } = await bulkDeleteApprovedChecklists(cleanupDays);
+                        showToast(`Successfully purged ${count} old checklist records.`, "success");
+                        setShowDangerPopup(false);
+                        // Refresh data if needed or stay on settings
+                        dispatch(userDetails()); 
+                      } catch (err) {
+                        console.error('Purge operation failed:', err);
+                        showToast("Failed to purge records. Database error.", "error");
+                      } finally {
+                        setIsRefreshing(false);
+                      }
+                    }}
+                    className="w-full py-3.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xs uppercase tracking-[0.2em] transition-all shadow-lg shadow-red-100 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isRefreshing ? (
+                      <><RefreshCw size={16} className="animate-spin" /> Purging...</>
+                    ) : (
+                      <>Confirm & Purge History</>
+                    )}
+                  </button>
+                  <button
+                    disabled={isRefreshing}
+                    onClick={() => setShowDangerPopup(false)}
+                    className="w-full py-3 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"
+                  >
+                    Cancel and Return
+                  </button>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-slate-100 text-center">
+                  <p className="text-[9px] text-slate-400 font-medium italic">
+                    Note: This is a system-level administrative action. <br/>
+                    <span className="font-bold text-slate-500">Currently executing in Test Mode.</span>
+                  </p>
                 </div>
               </div>
             </div>

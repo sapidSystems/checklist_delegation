@@ -227,7 +227,7 @@ export const postChecklistAdminDoneAPI = async (selectedHistoryItems) => {
 
     const updates = selectedHistoryItems.map(item => ({
       task_id: item.id || item.task_id, // Assuming each item has an 'id' or 'task_id' field
-      admin_done: "Done",
+      admin_done: true,
       admin_approval_date: now,
       admin_approved_by: username
       // You can add other fields to update if needed
@@ -250,5 +250,31 @@ export const postChecklistAdminDoneAPI = async (selectedHistoryItems) => {
   } catch (error) {
     console.error("Error in supabase operation:", error);
     return { error };
+  }
+};
+
+export const bulkDeleteApprovedChecklists = async (days) => {
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    const cutoffDateString = cutoffDate.toISOString().split('T')[0];
+
+    console.log(`Cleaning up checklists older than ${days} days (Before ${cutoffDateString})`);
+
+    const { data, error, count } = await supabase
+      .from('checklist')
+      .delete({ count: 'exact' })
+      .eq('admin_done', true)
+      .lt('submission_date', cutoffDateString);
+
+    if (error) {
+      console.error('Supabase error during bulk delete:', error);
+      throw error;
+    }
+    
+    return { count: count || 0 };
+  } catch (error) {
+    console.error('Error in bulkDeleteApprovedChecklists:', error);
+    throw error;
   }
 };
