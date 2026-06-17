@@ -27,7 +27,7 @@ import { insertDelegationDoneAndUpdate } from "../redux/api/delegationApi";
 import { sendUrgentTaskNotification, sendTaskExtensionNotification } from "../services/whatsappService";
 import { useMagicToast } from "../context/MagicToastContext";
 import RenderDescription, { MediaViewer } from "../components/RenderDescription";
-import logo from "../assets/Ace_Logoo.jpg";
+import logo from "../assets/nutech.jpeg";
 
 // Configuration object - Move all configurations here
 const CONFIG = {

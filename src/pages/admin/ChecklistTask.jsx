@@ -25,7 +25,8 @@ const formatDateISO = (date) => {
 
 const FREQUENCY_OPTIONS = [
     "One Time (No Recurrence)", "Alternate Day", "Daily", "Weekly",
-    "Fortnight", "Monthly", "Quarterly", "Half Yearly", "Yearly"
+    "Fortnight", "Monthly", "Quarterly", "Half Yearly", "Yearly",
+    "End of 1st week", "End of 2nd week", "End of 3rd week", "End of 4rth week"
 ];
 
 const defaultTask = () => ({
@@ -495,7 +496,11 @@ export default function ChecklistTask() {
         "Monthly": "monthly",
         "Quarterly": "quarterly",
         "Half Yearly": "half-yearly",
-        "Yearly": "yearly"
+        "Yearly": "yearly",
+        "End of 1st week": "end-of-1st-week",
+        "End of 2nd week": "end-of-2nd-week",
+        "End of 3rd week": "end-of-3rd-week",
+        "End of 4rth week": "end-of-4rth-week"
     };
 
     const getLocalDateString = (date) => {
@@ -541,6 +546,36 @@ export default function ChecklistTask() {
             }
 
             dates.push(toLocalISO(d));
+            return dates;
+        }
+
+        if (["end-of-1st-week", "end-of-2nd-week", "end-of-3rd-week", "end-of-4rth-week"].includes(freqKey)) {
+            let targetDay = 7;
+            if (freqKey === "end-of-2nd-week") targetDay = 14;
+            if (freqKey === "end-of-3rd-week") targetDay = 21;
+            if (freqKey === "end-of-4rth-week") targetDay = 28;
+
+            let current = new Date(startDate);
+            let attempts = 0;
+            while (current <= endDate && attempts < 24) {
+                attempts++;
+                let target = new Date(current.getFullYear(), current.getMonth(), targetDay);
+                if (target < startDate) {
+                    current.setMonth(current.getMonth() + 1);
+                    continue;
+                }
+                if (target > endDate) break;
+
+                while (target <= endDate && (isHoliday(target) || !isWorkingDay(target))) {
+                    target.setDate(target.getDate() + 1);
+                }
+
+                if (target <= endDate) {
+                    dates.push(toLocalISO(target));
+                }
+
+                current.setMonth(current.getMonth() + 1);
+            }
             return dates;
         }
 

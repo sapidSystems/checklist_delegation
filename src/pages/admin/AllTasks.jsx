@@ -66,7 +66,8 @@ const AllTasks = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [dateFilter, setDateFilter] = useState("all"); // all, today, overdue, upcoming
-  const [dropdownOpen, setDropdownOpen] = useState({ dateFilter: false });
+  const [userFilter, setUserFilter] = useState("all");
+  const [dropdownOpen, setDropdownOpen] = useState({ dateFilter: false, userFilter: false });
   const [lightboxImage, setLightboxImage] = useState(null); // { url, name }
   const [fetchingProgress, setFetchingProgress] = useState(0);
 
@@ -532,6 +533,12 @@ const AllTasks = () => {
 
       if (!matchesSearch) return false;
 
+      // Filter by User
+      if (userFilter !== "all") {
+        const taskUser = task.name || task.assigned_person || task.doer_name || "";
+        if (taskUser.toLowerCase() !== userFilter.toLowerCase()) return false;
+      }
+
       const taskDateValue = task[statusDateColumn];
       const status = taskDateValue ? getTimeStatus(taskDateValue, task.status) : null;
 
@@ -571,7 +578,7 @@ const AllTasks = () => {
 
       return true;
     });
-  }, [tasks, searchTerm, activeTab, dateFilter, sortDateColumn, statusDateColumn, getTimeStatus]);
+  }, [tasks, searchTerm, activeTab, dateFilter, userFilter, sortDateColumn, statusDateColumn, getTimeStatus]);
 
   const filteredHistoryTasks = useMemo(() => {
     const completionField = "submission_date";
@@ -582,6 +589,14 @@ const AllTasks = () => {
           (val) => val && val.toString().toLowerCase().includes(searchTerm.toLowerCase())
         )
         : true;
+
+      if (!matchesSearch) return false;
+
+      // Filter by User
+      if (userFilter !== "all") {
+        const taskUser = task.name || task.assigned_person || task.doer_name || "";
+        if (taskUser.toLowerCase() !== userFilter.toLowerCase()) return false;
+      }
 
       let matchesDateRange = true;
       if (startDate || endDate) {
@@ -602,7 +617,7 @@ const AllTasks = () => {
 
       return matchesSearch && matchesDateRange;
     });
-  }, [historyData, searchTerm, startDate, endDate, activeTab]);
+  }, [historyData, searchTerm, startDate, endDate, activeTab, userFilter]);
 
   // Handle Selections
   const handleSelectItem = useCallback((id, isChecked) => {
@@ -1080,6 +1095,45 @@ const AllTasks = () => {
                       <><History className="h-4 w-4" /><span>History</span></>
                     )}
                   </button>
+
+                  {/* User Filter */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setDropdownOpen(prev => ({ ...prev, userFilter: !prev.userFilter }))}
+                      className={`flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-xl border transition-all shadow-sm ${userFilter !== 'all' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-600 border-gray-200'}`}
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      <span className="capitalize">{userFilter === 'all' ? 'All Users' : userFilter}</span>
+                      <ChevronDown size={14} className={`transition-transform ${dropdownOpen?.userFilter ? 'rotate-180' : ''}`} />
+                    </button>
+                    {dropdownOpen?.userFilter && (
+                      <div className="absolute z-50 mt-2 w-48 right-0 rounded-xl bg-white shadow-xl border border-gray-100 py-1 overflow-y-auto max-h-60 animate-in fade-in slide-in-from-top-2 duration-200">
+                        <button
+                          onClick={() => {
+                            setUserFilter("all");
+                            setSelectedItems(new Set());
+                            setDropdownOpen(prev => ({ ...prev, userFilter: false }));
+                          }}
+                          className={`block w-full text-left px-4 py-2 text-xs font-bold transition-colors ${userFilter === "all" ? 'bg-purple-50 text-purple-700 border-l-2 border-purple-500' : 'text-gray-600 hover:bg-gray-50'}`}
+                        >
+                          All Users
+                        </button>
+                        {allUsers.map((name) => (
+                          <button
+                            key={name}
+                            onClick={() => {
+                              setUserFilter(name);
+                              setSelectedItems(new Set());
+                              setDropdownOpen(prev => ({ ...prev, userFilter: false }));
+                            }}
+                            className={`block w-full text-left px-4 py-2 text-xs font-bold transition-colors ${userFilter === name ? 'bg-purple-50 text-purple-700 border-l-2 border-purple-500' : 'text-gray-600 hover:bg-gray-50'}`}
+                          >
+                            {name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
                   {!showHistory && (
                     <>

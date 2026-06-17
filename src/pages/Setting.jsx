@@ -2488,6 +2488,24 @@ const Setting = () => {
                         className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition-all"
                         placeholder="Enter machine name..."
                       />
+                    ) : activeDeptSubTab === 'givenBy' ? (
+                      <select
+                        name="name"
+                        id="name"
+                        value={deptForm.name}
+                        onChange={handleDeptInputChange}
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition-all bg-gray-50"
+                      >
+                        <option value="">Select Assign From...</option>
+                        {(userData || [])
+                          .filter(u => u && u.user_name && (u.role === 'admin' || u.role === 'HOD'))
+                          .map(u => u.user_name)
+                          .sort((a, b) => a.localeCompare(b))
+                          .map(name => (
+                            <option key={name} value={name}>{name}</option>
+                          ))
+                        }
+                      </select>
                     ) : (
                       <input
                         type="text"
@@ -2496,7 +2514,7 @@ const Setting = () => {
                         value={deptForm.name}
                         onChange={handleDeptInputChange}
                         className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none transition-all"
-                        placeholder={activeDeptSubTab === 'givenBy' ? 'e.g. CEO' : 'e.g. Marketing'}
+                        placeholder="e.g. Marketing"
                       />
                     )}
                   </div>

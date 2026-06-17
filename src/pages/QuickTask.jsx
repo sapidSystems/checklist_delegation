@@ -702,7 +702,15 @@ export default function QuickTask() {
         "monthly": "monthly",
         "quarterly": "quarterly",
         "half-yearly": "half-yearly",
-        "yearly": "yearly"
+        "yearly": "yearly",
+        "End of 1st week": "end-of-1st-week",
+        "End of 2nd week": "end-of-2nd-week",
+        "End of 3rd week": "end-of-3rd-week",
+        "End of 4rth week": "end-of-4rth-week",
+        "end-of-1st-week": "end-of-1st-week",
+        "end-of-2nd-week": "end-of-2nd-week",
+        "end-of-3rd-week": "end-of-3rd-week",
+        "end-of-4rth-week": "end-of-4rth-week"
     };
 
     const freqKey = freqMap[frequency] || "one-time";
@@ -740,6 +748,36 @@ export default function QuickTask() {
         const d = new Date(start);
         if (!isHoliday(d) && isWorkingDay(d)) {
             dates.push(toLocalISO(d));
+        }
+        return dates;
+    }
+
+    if (["end-of-1st-week", "end-of-2nd-week", "end-of-3rd-week", "end-of-4rth-week"].includes(freqKey)) {
+        let targetDay = 7;
+        if (freqKey === "end-of-2nd-week") targetDay = 14;
+        if (freqKey === "end-of-3rd-week") targetDay = 21;
+        if (freqKey === "end-of-4rth-week") targetDay = 28;
+
+        let current = new Date(start);
+        let attempts = 0;
+        while (current <= end && attempts < 24) {
+            attempts++;
+            let target = new Date(current.getFullYear(), current.getMonth(), targetDay);
+            if (target < start) {
+                current.setMonth(current.getMonth() + 1);
+                continue;
+            }
+            if (target > end) break;
+
+            while (target <= end && (isHoliday(target) || !isWorkingDay(target))) {
+                target.setDate(target.getDate() + 1);
+            }
+
+            if (target <= end) {
+                dates.push(toLocalISO(target));
+            }
+
+            current.setMonth(current.getMonth() + 1);
         }
         return dates;
     }
@@ -2134,6 +2172,10 @@ export default function QuickTask() {
                       <option value="Quarterly">Quarterly</option>
                       <option value="Half Yearly">Half Yearly</option>
                       <option value="Yearly">Yearly</option>
+                      <option value="End of 1st week">End of 1st week</option>
+                      <option value="End of 2nd week">End of 2nd week</option>
+                      <option value="End of 3rd week">End of 3rd week</option>
+                      <option value="End of 4rth week">End of 4rth week</option>
                     </select>
                   </div>
                   <div className="space-y-1.5">

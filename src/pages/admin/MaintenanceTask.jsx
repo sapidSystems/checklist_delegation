@@ -466,6 +466,10 @@ const MaintenanceTaskCard = ({
                                 <option value="quarterly">Quarterly</option>
                                 <option value="half-yearly">Half Yearly</option>
                                 <option value="yearly">Yearly</option>
+                                <option value="end-of-1st-week">End of 1st week</option>
+                                <option value="end-of-2nd-week">End of 2nd week</option>
+                                <option value="end-of-3rd-week">End of 3rd week</option>
+                                <option value="end-of-4rth-week">End of 4rth week</option>
                             </select>
                         </div>
                         <div>
@@ -591,6 +595,49 @@ export default function MaintenanceTask() {
                 return []; // Prevent assignment on holiday
             }
             addEntry(startDate, task.workDescription);
+            return generatedList;
+        }
+
+        if (["end-of-1st-week", "end-of-2nd-week", "end-of-3rd-week", "end-of-4rth-week"].includes(freq)) {
+            let targetDay = 7;
+            if (freq === "end-of-2nd-week") targetDay = 14;
+            if (freq === "end-of-3rd-week") targetDay = 21;
+            if (freq === "end-of-4rth-week") targetDay = 28;
+
+            const endDate = new Date(startDate);
+            endDate.setFullYear(endDate.getFullYear() + 1);
+
+            const { data: workingData } = await supabase
+                .from('working_day_calender')
+                .select('working_date')
+                .gte('working_date', getLocalDateString(startDate))
+                .lte('working_date', getLocalDateString(endDate));
+
+            const workingDaySet = new Set(workingData?.map(d => d.working_date) || []);
+            const isHoliday = (d) => holidays.includes(getLocalDateString(d));
+            const isWorkingDay = (d) => workingDaySet.has(getLocalDateString(d));
+
+            let current = new Date(startDate);
+            let attempts = 0;
+            while (current <= endDate && attempts < 24) {
+                attempts++;
+                let target = new Date(current.getFullYear(), current.getMonth(), targetDay);
+                if (target < startDate) {
+                    current.setMonth(current.getMonth() + 1);
+                    continue;
+                }
+                if (target > endDate) break;
+
+                while (target <= endDate && (isHoliday(target) || !isWorkingDay(target))) {
+                    target.setDate(target.getDate() + 1);
+                }
+
+                if (target <= endDate) {
+                    addEntry(target, task.workDescription);
+                }
+
+                current.setMonth(current.getMonth() + 1);
+            }
             return generatedList;
         }
 
