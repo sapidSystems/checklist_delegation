@@ -40,6 +40,7 @@ const defaultTask = () => ({
     duration: "",
     enableReminders: true,
     requireAttachment: false,
+    skipSunday: false,
     date: new Date(),
     time: "09:00",
     recordedAudio: null,
@@ -397,11 +398,11 @@ function TaskCard({ task, index, total, department, doerName, givenBy, dispatch,
                 </div>
 
                 {/* Toggles */}
-                <div className="flex gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <button
                         type="button"
                         onClick={() => onUpdate(task.id, { enableReminders: !task.enableReminders })}
-                        className={`flex-1 flex items-center justify-between px-3 py-2 rounded-lg border text-xs font-bold transition-all ${task.enableReminders ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
+                        className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs font-bold transition-all ${task.enableReminders ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
                     >
                         <span>Enable Reminders</span>
                         <div className={`w-8 h-4 flex items-center rounded-full p-0.5 transition-colors ${task.enableReminders ? 'bg-purple-600' : 'bg-gray-300'}`}>
@@ -411,11 +412,21 @@ function TaskCard({ task, index, total, department, doerName, givenBy, dispatch,
                     <button
                         type="button"
                         onClick={() => onUpdate(task.id, { requireAttachment: !task.requireAttachment })}
-                        className={`flex-1 flex items-center justify-between px-3 py-2 rounded-lg border text-xs font-bold transition-all ${task.requireAttachment ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
+                        className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs font-bold transition-all ${task.requireAttachment ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
                     >
                         <span>Require Attachment</span>
                         <div className={`w-8 h-4 flex items-center rounded-full p-0.5 transition-colors ${task.requireAttachment ? 'bg-purple-600' : 'bg-gray-300'}`}>
                             <div className={`bg-white w-3 h-3 rounded-full shadow transform transition-transform ${task.requireAttachment ? 'translate-x-4' : ''}`} />
+                        </div>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => onUpdate(task.id, { skipSunday: !task.skipSunday })}
+                        className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs font-bold transition-all ${task.skipSunday ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}
+                    >
+                        <span>Sunday Off</span>
+                        <div className={`w-8 h-4 flex items-center rounded-full p-0.5 transition-colors ${task.skipSunday ? 'bg-purple-600' : 'bg-gray-300'}`}>
+                            <div className={`bg-white w-3 h-3 rounded-full shadow transform transition-transform ${task.skipSunday ? 'translate-x-4' : ''}`} />
                         </div>
                     </button>
                 </div>
@@ -536,6 +547,7 @@ export default function ChecklistTask() {
         const workingDaySet = new Set(workingData?.map(d => d.working_date) || []);
         const isHoliday = (d) => holidays.includes(getLocalDateString(d));
         const isWorkingDay = (d) => workingDaySet.has(getLocalDateString(d));
+        const shouldSkip = (d) => task.skipSunday && d.getDay() === 0;
         const toLocalISO = (d) => `${getLocalDateString(d)}T${time}:00`;
         const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
 
@@ -543,8 +555,8 @@ export default function ChecklistTask() {
             const d = new Date(startDate);
             const dateStr = getLocalDateString(d);
 
-            // Check if it's a holiday OR not a working day
-            if (isHoliday(d) || !isWorkingDay(d)) {
+            // Check if it's a holiday OR not a working day OR should skip Sunday
+            if (isHoliday(d) || !isWorkingDay(d) || shouldSkip(d)) {
                 return []; // Return empty to prevent assignment
             }
 
@@ -577,12 +589,12 @@ export default function ChecklistTask() {
             };
 
             // First task is always the user's selected planned date
-            if (!isHoliday(startDate) && isWorkingDay(startDate)) {
+            if (!isHoliday(startDate) && isWorkingDay(startDate) && !shouldSkip(startDate)) {
                 dates.push(toLocalISO(startDate));
             } else {
                 // Shift to next working day if the planned date itself is not a working day
                 let shifted = new Date(startDate);
-                while (shifted <= endDate && (isHoliday(shifted) || !isWorkingDay(shifted))) {
+                while (shifted <= endDate && (isHoliday(shifted) || !isWorkingDay(shifted) || shouldSkip(shifted))) {
                     shifted.setDate(shifted.getDate() + 1);
                 }
                 if (shifted <= endDate) {
@@ -599,7 +611,7 @@ export default function ChecklistTask() {
 
                 if (target && target <= endDate) {
                     // Shift to next working day if target falls on holiday/non-working day
-                    while (target <= endDate && (isHoliday(target) || !isWorkingDay(target))) {
+                    while (target <= endDate && (isHoliday(target) || !isWorkingDay(target) || shouldSkip(target))) {
                         target.setDate(target.getDate() + 1);
                     }
                     if (target <= endDate) {
@@ -616,7 +628,7 @@ export default function ChecklistTask() {
             const validDays = [];
             let d = new Date(startDate);
             while (d <= endDate) {
-                if (!isHoliday(d) && isWorkingDay(d)) validDays.push(new Date(d));
+                if (!isHoliday(d) && isWorkingDay(d) && !shouldSkip(d)) validDays.push(new Date(d));
                 d.setDate(d.getDate() + 1);
             }
             if (freqKey === 'daily') validDays.forEach(day => dates.push(toLocalISO(day)));
@@ -629,7 +641,7 @@ export default function ChecklistTask() {
 
                 // For other frequencies, shift to next working day if current is bad
                 let target = new Date(current);
-                while (target <= endDate && (isHoliday(target) || !isWorkingDay(target))) {
+                while (target <= endDate && (isHoliday(target) || !isWorkingDay(target) || shouldSkip(target))) {
                     target.setDate(target.getDate() + 1);
                 }
 
