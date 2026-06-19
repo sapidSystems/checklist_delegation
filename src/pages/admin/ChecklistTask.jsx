@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-    ClipboardList, Calendar, X, Mic, Square, Trash2, Plus, Save, Loader2, CheckCircle2, Clock, FileCheck, Play, Pause, ExternalLink
+    ClipboardList, Calendar, X, Mic, Square, Trash2, Plus, Save, Loader2, CheckCircle2, Clock, FileCheck, Play, Pause, ExternalLink, Upload
 } from "lucide-react";
 import { ReactMediaRecorder } from "react-media-recorder";
+import BulkImportModal from "../../components/BulkImportModal";
 import AdminLayout from "../../components/layout/AdminLayout";
 import AudioPlayer from "../../components/AudioPlayer";
 import { useDispatch, useSelector } from "react-redux";
@@ -431,6 +432,7 @@ export default function ChecklistTask() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [successMessage, setSuccessMessage] = useState("");
     const [holidays, setHolidays] = useState([]);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     // Per-task list
     const [tasks, setTasks] = useState([
@@ -945,9 +947,18 @@ export default function ChecklistTask() {
                             <p className="text-sm text-gray-500 mt-0.5">Assign one or multiple checklist tasks at once</p>
                         </div>
                     </div>
-                    <button onClick={() => navigate('/dashboard/assign-task')} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all">
-                        <X className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button 
+                            type="button" 
+                            onClick={() => setIsImportModalOpen(true)}
+                            className="flex items-center gap-1.5 px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-xl text-xs border border-purple-200 transition-all shadow-sm cursor-pointer"
+                        >
+                            <Upload size={14} /> Bulk Import
+                        </button>
+                        <button onClick={() => navigate('/dashboard/assign-task')} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Success Message */}
@@ -1097,6 +1108,14 @@ export default function ChecklistTask() {
                     </div>
                 </div>
             )}
+            <BulkImportModal 
+                isOpen={isImportModalOpen} 
+                onClose={() => setIsImportModalOpen(false)} 
+                onImportSuccess={(msg) => {
+                    setSuccessMessage(msg);
+                    showToast(msg, 'success');
+                }}
+            />
         </AdminLayout>
     );
 }

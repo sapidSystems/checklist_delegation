@@ -851,10 +851,15 @@ const Setting = () => {
   };
 
 
-  // User form handlers
   const handleUserInputChange = (e) => {
     const { name, value } = e.target;
-    setUserForm(prev => ({ ...prev, [name]: value }));
+    setUserForm(prev => {
+      const updated = { ...prev, [name]: value };
+      if (name === 'department') {
+        updated.user_access = value;
+      }
+      return updated;
+    });
   };
 
   // const handleAddUser = (e) => {
