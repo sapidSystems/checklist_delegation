@@ -248,6 +248,15 @@ function TaskCard({ task, index, total, department, doerName, givenBy, dispatch,
                                                 newRefs[i].link = e.target.value;
                                                 onUpdate(task.id, { references: newRefs });
                                             }}
+                                            onBlur={(e) => {
+                                                let val = e.target.value.trim();
+                                                if (val && !/^https?:\/\//i.test(val)) {
+                                                    val = `https://${val}`;
+                                                    const newRefs = [...task.references];
+                                                    newRefs[i].link = val;
+                                                    onUpdate(task.id, { references: newRefs });
+                                                }
+                                            }}
                                             className={`flex-1 w-full px-3 py-1.5 text-xs font-medium bg-white border rounded-lg outline-none transition-all ${ytId ? 'border-red-200 focus:ring-2 focus:ring-red-100 text-red-900' : 'border-blue-200 focus:ring-2 focus:ring-blue-100 text-blue-900'}`}
                                         />
                                     </div>
@@ -664,8 +673,27 @@ export default function ChecklistTask() {
     const handlePreview = async () => {
         setIsSubmitting(true);
         try {
+            // Normalize reference links
+            const normalizedTasks = tasks.map(t => {
+                if (t.references && t.references.length > 0) {
+                    const normalizedRefs = t.references.map(ref => {
+                        if (ref.link && ['video', 'pdf', 'link'].includes(ref.type)) {
+                            let link = ref.link.trim();
+                            if (link && !/^https?:\/\//i.test(link)) {
+                                link = `https://${link}`;
+                            }
+                            return { ...ref, link };
+                        }
+                        return ref;
+                    });
+                    return { ...t, references: normalizedRefs };
+                }
+                return t;
+            });
+            setTasks(normalizedTasks);
+
             // Parallel Validation
-            const validationResults = await Promise.all(tasks.map(async (t, i) => {
+            const validationResults = await Promise.all(normalizedTasks.map(async (t, i) => {
                 if (!t.department || !t.givenBy) {
                     return { success: false, message: `Task ${i + 1}: Please select Department and Assign From.` };
                 }
@@ -706,7 +734,7 @@ export default function ChecklistTask() {
             }
 
             // Task Generation in Parallel
-            const generationPromises = tasks.map(async (task) => {
+            const generationPromises = normalizedTasks.map(async (task) => {
                 const dates = await generateDatesForTask(task);
                 const freqKey = freqMap[task.frequency] || "one-time";
                 return dates.map(dueDate => ({
@@ -734,8 +762,27 @@ export default function ChecklistTask() {
     };
 
     const confirmSubmission = async () => {
-        for (let i = 0; i < tasks.length; i++) {
-            const t = tasks[i];
+        // Normalize reference links
+        const normalizedTasks = tasks.map(t => {
+            if (t.references && t.references.length > 0) {
+                const normalizedRefs = t.references.map(ref => {
+                    if (ref.link && ['video', 'pdf', 'link'].includes(ref.type)) {
+                        let link = ref.link.trim();
+                        if (link && !/^https?:\/\//i.test(link)) {
+                            link = `https://${link}`;
+                        }
+                        return { ...ref, link };
+                    }
+                    return ref;
+                });
+                return { ...t, references: normalizedRefs };
+            }
+            return t;
+        });
+        setTasks(normalizedTasks);
+
+        for (let i = 0; i < normalizedTasks.length; i++) {
+            const t = normalizedTasks[i];
             if (!t.department || !t.givenBy) {
                 alert(`Task ${i + 1}: Please select Department and Assign From.`);
                 return;
@@ -784,7 +831,7 @@ export default function ChecklistTask() {
         setIsSubmitting(true);
         try {
             // 1. Parallelize Audio Uploads
-            const audioUploadPromises = tasks.map(async (task) => {
+            const audioUploadPromises = normalizedTasks.map(async (task) => {
                 if (task.recordedAudio && task.recordedAudio.blob) {
                     const fileName = `voice-notes/${Date.now()}-${Math.random().toString(36).substring(7)}.webm`;
                     const { error: uploadError } = await supabase.storage
@@ -809,7 +856,7 @@ export default function ChecklistTask() {
             }, {});
 
             // 1.5 Parallelize Instruction Uploads
-            const instructionUploadPromises = tasks.map(async (task) => {
+            const instructionUploadPromises = normalizedTasks.map(async (task) => {
                 const resultsUrls = [];
                 const resultsTypes = [];
 
@@ -851,7 +898,7 @@ export default function ChecklistTask() {
 
             // 2. Generate all occurrences
             const allTasksToSubmit = [];
-            for (const task of tasks) {
+            for (const task of normalizedTasks) {
                 const dates = await generateDatesForTask(task);
                 const freqKey = freqMap[task.frequency] || "one-time";
                 const audioUrl = audioUrlMap[task.id];
