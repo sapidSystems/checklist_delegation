@@ -435,6 +435,9 @@ export const fetchCustomDropdownsApi = async () => {
 
     const formatted = [];
     data.forEach(item => {
+      if (item.project_type === 'daily_reminder_time') {
+        return;
+      }
       Object.keys(CATEGORY_TO_COLUMN).forEach(category => {
         const column = CATEGORY_TO_COLUMN[category];
         if (item[column] !== null && item[column] !== undefined && item[column] !== "") {

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, User, Building, X, Save, Edit, Trash2, Settings, Search, ChevronDown, Calendar, RefreshCw, Image } from 'lucide-react';
+import { Plus, User, Building, X, Save, Edit, Trash2, Settings, Search, ChevronDown, Calendar, RefreshCw, Image, Clock } from 'lucide-react';
 import AdminLayout from '../components/layout/AdminLayout';
 import { useDispatch, useSelector } from 'react-redux';
 import { createDepartment, createUser, deleteUser, departmentOnlyDetails, givenByDetails, departmentDetails, updateDepartment, updateUser, userDetails, customDropdownDetails, createCustomDropdown, deleteCustomDropdown, createAssignFrom, deleteDepartment, deleteAssignFrom, updateCustomDropdown, updateAssignFrom, createMachineEntries, uploadProfileImage } from '../redux/slice/settingSlice';
@@ -74,6 +74,73 @@ const Setting = () => {
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [bulkImportFile, setBulkImportFile] = useState(null);
   const [bulkImportLoading, setBulkImportLoading] = useState(false);
+
+  const [reminderTime, setReminderTime] = useState('09:00');
+  const [isSavingReminder, setIsSavingReminder] = useState(false);
+
+  // Fetch daily reminder time on tab change
+  useEffect(() => {
+    if (activeTab === 'daily_reminder') {
+      const fetchReminderTime = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('dropdown_options')
+            .select('*')
+            .eq('project_type', 'daily_reminder_time')
+            .maybeSingle();
+
+          if (error) throw error;
+          if (data && data.task_status) {
+            setReminderTime(data.task_status);
+          }
+        } catch (err) {
+          console.error("Error fetching daily reminder time:", err);
+        }
+      };
+      fetchReminderTime();
+    }
+  }, [activeTab]);
+
+  const handleSaveReminderTime = async () => {
+    setIsSavingReminder(true);
+    try {
+      // Check if it already exists
+      const { data: existing, error: fetchError } = await supabase
+        .from('dropdown_options')
+        .select('*')
+        .eq('project_type', 'daily_reminder_time')
+        .maybeSingle();
+
+      if (fetchError) throw fetchError;
+
+      if (existing) {
+        // Update
+        const { error: updateError } = await supabase
+          .from('dropdown_options')
+          .update({ task_status: reminderTime })
+          .eq('id', existing.id);
+        
+        if (updateError) throw updateError;
+      } else {
+        // Insert
+        const { error: insertError } = await supabase
+          .from('dropdown_options')
+          .insert([{
+            project_type: 'daily_reminder_time',
+            task_status: reminderTime
+          }]);
+          
+        if (insertError) throw insertError;
+      }
+
+      showToast("Daily reminder time saved successfully!", "success");
+    } catch (err) {
+      console.error("Error saving daily reminder time:", err);
+      showToast("Failed to save daily reminder time.", "error");
+    } finally {
+      setIsSavingReminder(false);
+    }
+  };
 
   const { userData, department, departmentsOnly, givenBy, customDropdowns, loading, error } = useSelector((state) => state.setting);
   const dispatch = useDispatch();
@@ -1275,6 +1342,7 @@ const Setting = () => {
                 { id: 'departments', label: 'Departments', icon: Building, action: () => { dispatch(departmentDetails()); dispatch(givenByDetails()); } },
                 { id: 'leave', label: 'Leave', icon: Calendar },
                 { id: 'categories', label: 'Machines', icon: Settings },
+                { id: 'daily_reminder', label: 'Daily Reminder', icon: Clock },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -2301,6 +2369,55 @@ const Setting = () => {
                   );
                 })()}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Daily Reminder Tab */}
+        {activeTab === 'daily_reminder' && (
+          <div className="bg-white shadow-xl rounded-2xl overflow-hidden border border-purple-100">
+            <div className="bg-gradient-to-r from-purple-50 to-pink-50 px-8 py-6 flex justify-between items-center border-b border-purple-100">
+              <div>
+                <h2 className="text-xl font-bold text-purple-900">Daily Reminder Settings</h2>
+                <p className="text-sm text-purple-600 font-medium">Set the daily schedule for sending task reminder emails to users with pending tasks.</p>
+              </div>
+            </div>
+
+            <div className="p-8 max-w-md mx-auto space-y-6">
+              <div className="bg-purple-50/50 p-6 rounded-2xl border border-purple-100 space-y-4">
+                <label className="block text-sm font-bold text-purple-800 uppercase tracking-wider mb-2">
+                  Reminder Execution Time (IST)
+                </label>
+                <div className="flex gap-4 items-center">
+                  <input
+                    type="time"
+                    value={reminderTime}
+                    onChange={(e) => setReminderTime(e.target.value)}
+                    className="flex-1 p-3 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none bg-white text-lg font-semibold text-center text-purple-950 shadow-inner transition-all"
+                  />
+                </div>
+                <p className="text-xs text-purple-600 leading-relaxed font-medium">
+                  Email reminders will be dispatched automatically every day at this time to all active users who have one or more pending tasks.
+                </p>
+              </div>
+
+              <button
+                onClick={handleSaveReminderTime}
+                disabled={isSavingReminder}
+                className="w-full flex justify-center items-center gap-2 py-3 px-6 bg-purple-600 text-white rounded-xl font-bold shadow-lg hover:bg-purple-700 disabled:bg-purple-300 transition-all text-sm cursor-pointer"
+              >
+                {isSavingReminder ? (
+                  <>
+                    <RefreshCw className="animate-spin" size={16} />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} />
+                    Save Settings
+                  </>
+                )}
+              </button>
             </div>
           </div>
         )}
